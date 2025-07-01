@@ -1,44 +1,41 @@
+import nc from 'next-connect';
 import multer from 'multer';
-import nextConnect from 'next-connect';
 import fs from 'fs';
 import fetch from 'node-fetch';
 
 const upload = multer({ dest: '/tmp' });
-const handler = nextConnect();
 
-handler.use(upload.single('userPhoto'));
+const handler = nc();
+handler.use(upload.fields([{ name: 'userPhoto' }, { name: 'productPhoto' }]));
 
 handler.post(async (req, res) => {
   try {
-    const userPhotoPath = req.file.path;
-    const productImageUrl = req.body.productPhoto;
+    const userPhoto = req.files['userPhoto'][0];
+    const productPhoto = req.files['productPhoto'][0];
 
-    const userImageBase64 = fs.readFileSync(userPhotoPath, 'base64');
-    const productImageResp = await fetch(productImageUrl);
-    const productBuffer = await productImageResp.buffer();
-    const productImageBase64 = productBuffer.toString('base64');
+    const userBase64 = fs.readFileSync(userPhoto.path, 'base64');
+    const productBase64 = fs.readFileSync(productPhoto.path, 'base64');
 
-    const response = await fetch("https://api.openai.com/v1/images/edits", {
+    const result = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        image: `data:image/jpeg;base64,${userImageBase64}`,
-        mask: `data:image/jpeg;base64,${productImageBase64}`,
-        prompt: "Replace the person's shirt with the style shown in the product image.",
+        image: `data:image/jpeg;base64,${userBase64}`,
+        mask: `data:image/jpeg;base64,${productBase64}`,
+        prompt: "Replace the person's shirt with the style shown in the product image",
         n: 1,
-        size: "512x512",
-      }),
+        size: "512x512"
+      })
     });
 
-    const data = await response.json();
-
+    const data = await result.json();
     if (data.data && data.data[0].url) {
       res.status(200).json({ result: data.data[0].url });
     } else {
-      res.status(500).json({ error: "OpenAI error", detail: data });
+      res.status(500).json({ error: 'OpenAI error', detail: data });
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -47,8 +44,8 @@ handler.post(async (req, res) => {
 
 export const config = {
   api: {
-    bodyParser: false,
-  },
+    bodyParser: false
+  }
 };
 
 export default handler;
